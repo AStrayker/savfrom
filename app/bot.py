@@ -1,22 +1,11 @@
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import BufferedInputFile, Message
-
-from settings import settings
+import asyncio
+from telegram import Update, Bot
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from tiktok.api import TikTokAPI
+from settings import settings  # Предположим, что settings.py остаётся без изменений
 
-dp = Dispatcher()
-
-filters = [
-    F.text.contains("tiktok.com"),
-    (not settings.allowed_ids)
-    | F.chat.id.in_(settings.allowed_ids)
-    | F.from_user.id.in_(settings.allowed_ids),
-]
-
-
-@dp.message(*filters)
-@dp.channel_post(*filters)
-async def handle_tiktok_request(message: Message, bot: Bot) -> None:
+async def handle_tiktok_request(update: Update, context: CallbackContext) -> None:
+    message = update.message
     entries = [
         message.text[e.offset : e.offset + e.length]
         for e in message.entities or []
@@ -32,11 +21,31 @@ async def handle_tiktok_request(message: Message, bot: Bot) -> None:
         if not tiktok.video:
             continue
 
-        video = BufferedInputFile(tiktok.video, filename="video.mp4")
+        video = tiktok.video
         caption = tiktok.caption if settings.with_captions else None
 
         if settings.reply_to_message:
-            await message.reply_video(video=video, caption=caption)
+            await context.bot.send_video(chat_id=message.chat_id, video=video, caption=caption, reply_to_message_id=message.message_id)
         else:
-            await bot.send_video(chat_id=message.chat.id, video=video, caption=caption)
-            
+            await context.bot.send_video(chat_id=message.chat_id, video=video, caption=caption)
+
+async def welcome(update: Update, context: CallbackContext) -> None:
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Добро пожаловать! Я бот для скачивания TikTok видео. Отправьте мне ссылку на видео TikTok.")
+
+def main():
+    updater = Updater(settings.api_token, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", welcome))
+    
+    # Фильтры для сообщений с URL
+    filters = Filters.text & (Filters.entity("url") | Filters.entity("text_link"))
+    if settings.allowed_ids:
+        filters &= Filters.chat(chat_id=settings.allowed_ids)
+    dp.add_handler(MessageHandler(filters, handle_tiktok_request))
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    asyncio.run(main())

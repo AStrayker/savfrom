@@ -1,6 +1,6 @@
 import asyncio
 from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
 from tiktok.api import TikTokAPI
 from settings import settings  # Предположим, что settings.py остаётся без изменений
 
